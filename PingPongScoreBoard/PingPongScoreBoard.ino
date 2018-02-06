@@ -1,0 +1,349 @@
+/*
+  Computer Architecture
+  Assignment 1: Ping Pong Score tracker
+  Group:Anis, Vida, Shaila
+
+*/
+#include <LiquidCrystal.h> // includes the LiquidCrystal Library 
+LiquidCrystal lcd(5, 4, 10, 11, 12, 13); // Creates an LC object. Parameters: (rs, enable, d4, d5, d6, d7)
+int pinP1I = 6; // player 1 score increase
+int pinP1D = 9; // player 1 score decrease
+int pinP2I = 3; // player 2 score increase
+int pinP2D = 2; // player 2 score decrease
+int ledPin1 =  7; // Player 1 serving
+int ledPin2 =  8;  // player 2 serving
+
+int p1Score;
+int p2Score;
+int p1SetWon;
+int p2SetWon;
+int totalScorePerSet;
+int buttonState1 = 0; // value of p1 increase btn
+int buttonState2 = 0;// value of p1 decrease btn
+int buttonState3 = 0; // value of p2 increase btn
+int buttonState4 = 0; // value of p2 decrease btn
+boolean ledOn = false;
+int initialPress = 0;
+
+//for bounce
+unsigned long  lastState;
+unsigned long  bounce = 100;
+
+//screen swap
+int swap = 1;
+
+void setup() {
+
+
+  lcd.begin(16, 2); // Initializes the interface to the LCD screen, and specifies the dimensions (width and height) of the display }
+  screenSetup();
+  setLED();//Initialize LED to turn on when device turned on
+  pinMode(ledPin1, OUTPUT);
+  pinMode(ledPin2, OUTPUT);
+  pinMode(pinP1I, INPUT);
+  pinMode(pinP1D, INPUT);
+  pinMode(pinP2I, INPUT);
+  pinMode(pinP2D, INPUT);
+  attachInterrupt(digitalPinToInterrupt(6), p1I, RISING);
+  attachInterrupt(digitalPinToInterrupt(9), p1D, RISING);
+  attachInterrupt(digitalPinToInterrupt(3), p2I, RISING);
+  attachInterrupt(digitalPinToInterrupt(2), p2D, RISING);
+}
+void loop () {
+
+
+  buttonState1 = digitalRead(6);
+  buttonState2 = digitalRead(9);
+  buttonState3 = digitalRead(3);
+  buttonState4 = digitalRead(2);
+
+
+  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+  if (buttonState1 || buttonState2 || buttonState3 || buttonState4) {
+    lastState = millis();
+  }
+
+  delay(100);
+}
+
+/*
+   This method increaeses the score of player 1 when button1 is pressed
+*/
+void p1I() {
+
+  if (lastState - millis() > bounce) { //account for noise reading
+    p1Score++;
+    screenSetup();
+    lastState = millis();
+    setLED();
+  }
+  delay(100);
+  winningScore();//check if player can win a set yet or not
+ 
+
+}
+
+/*
+   This method decreases the score of player 1 when button1=2 is pressed
+*/
+void p1D() {
+
+  if (lastState - millis() > bounce) {
+    if (p1Score != 0)
+      p1Score--;
+    screenSetup();
+    lastState = millis();
+    if ((p1Score + p2Score) % 2 != 0) {
+      digitalWrite(ledPin1, digitalRead(ledPin2));
+      digitalWrite(ledPin2, !digitalRead(ledPin1));
+
+    }
+  }
+  winningScore();//check if player can win a set yet or not
+  delay(100);
+
+}
+
+/*
+   This method increaeses the score of player 2 when button3 is pressed
+*/
+void p2I() {
+
+  if (lastState - millis() > bounce) {
+    p2Score++;
+    screenSetup();
+    lastState = millis();
+    setLED();
+  }
+  delay(100);
+  winningScore();//check if player can win a set yet or not
+  
+
+}
+/*
+   This method decreases the score of player 2 when button4 is pressed
+*/
+void p2D() {
+
+  if (lastState - millis() > bounce) {
+    if (p2Score != 0)
+      p2Score--;
+    screenSetup();
+    lastState = millis();
+
+    if ((p1Score + p2Score) % 2 != 0) {
+      digitalWrite(ledPin1, digitalRead(ledPin2));
+      digitalWrite(ledPin2, !digitalRead(ledPin1));
+
+    }
+  }
+  winningScore();//check if player can win a set yet or not
+  delay(100);
+}
+
+/*
+   This method configures the LEDs
+   The LED's indicate which player is the server
+   Service swaps between the players after every 2 points for score<10
+   If scores are a tie at 10<=, then service swaps between players per 1 point
+*/
+void setLED()
+{
+
+  if ( ledOn == false) //game has just started, initally turns on LED player A by default
+  {
+    digitalWrite(ledPin1, HIGH); //Assuming Player 1 starts
+    digitalWrite(ledPin2, LOW);
+    ledOn = true;
+  }
+  else
+  {
+    if (p1Score >= 10 && p2Score >= 10) //Change LED everytime score changes/after every serve
+    {
+
+      digitalWrite(ledPin1, digitalRead(ledPin2));
+      digitalWrite(ledPin2, !digitalRead(ledPin1));
+    }
+
+    else if ( (p1Score + p2Score) % 2 == 0) //Change LED after every 2 serves
+    {
+      digitalWrite(ledPin1, digitalRead(ledPin2));
+      digitalWrite(ledPin2, !digitalRead(ledPin1));
+    }
+  }
+}
+
+/*
+   This method evaluates the players scores and determines if any player has won a set
+*/
+void winningScore()
+{
+  if (p1Score > 10 && p2Score < 10) //Player 1 has won
+  {
+    if (swap % 2 == 1) {
+      p1SetWon++;
+    } else if (swap % 2 == 0) {
+      p2SetWon++;
+    }
+
+    swap++;
+    //reset the score for next set
+    p1Score = 0;
+    p2Score = 0;
+    //check if this increase in score makes this player a winner of the best of 5 game
+    overallWinner();
+    //next game starts by this player since they won
+    digitalWrite(ledPin2, HIGH);
+    digitalWrite(ledPin1, LOW);
+    screenSetup();
+  }
+
+  else if (p2Score > 10 && p1Score < 10) //Player 2 has won
+  {
+    if (swap % 2 == 1) {
+      p2SetWon++;
+    } else if (swap % 2 == 0) {
+      p1SetWon++;
+    }
+
+    swap++;
+    //reset score for next set
+    p1Score = 0;
+    p2Score = 0;
+    //check if this increase in score makes this player a winner of the best of 5 game
+    overallWinner();
+    //next game starts by this player
+    digitalWrite(ledPin1, HIGH);
+    digitalWrite(ledPin2, LOW);
+    screenSetup();
+  }
+
+  else if (p1Score >= 10 && p2Score >= 10) //Change LED everytime score changes/after every serve
+  {
+    //diffrence of 2 scores is the winner
+    if (p1Score - p2Score > 1) {
+      //player 1 won
+      if (swap % 2 == 1) {
+        p1SetWon++;
+      } else if (swap % 2 == 0) {
+        p2SetWon++;
+      }
+
+      swap++;
+      p1Score = 0;
+      p2Score = 0;
+      overallWinner();
+    } else if (p2Score - p1Score > 1) {
+      //player 2 won
+      if (swap % 2 == 1) {
+        p2SetWon++;
+      } else if (swap % 2 == 0) {
+        p1SetWon++;
+      }
+      swap++;
+      p1Score = 0;
+      p2Score = 0;
+      overallWinner();
+
+    }
+  }
+}
+
+/*
+   This method checks how many sets are played in total and if there are any winners
+   Method is called within winningScore method
+*/
+void overallWinner() {
+
+  if (p1SetWon + p2SetWon == 5) {
+    //if a total of 5 sets have been played,
+    //check who won, pass winner as parameter to winnerScreen method
+    if (p1SetWon > p2SetWon) {
+      winnerScreen("Player 1");
+    } else if (p1SetWon < p2SetWon) {
+      winnerScreen("Player 2");
+    }
+    exit(0);
+  }
+
+}
+/*
+   This method is the general configuration of the LCD screen
+   Prints each players respective score(s) per set and set(s) per game
+   Swaps the view of the Player's as the players swap sides per set
+*/
+void screenSetup() {
+  lcd.clear();
+  if (swap % 2 == 1) {
+    lcd.print(" P1  ");
+    lcd.print(p1Score);
+    lcd.print("--");
+    lcd.print(p2Score);
+    lcd.print("   P2 ");
+    lcd.setCursor(0, 1);
+    lcd.print("   ");
+    lcd.print(p1SetWon);
+    lcd.print("  Sets  ");
+    lcd.print(p2SetWon);
+
+  } else if (swap % 2 == 0) {
+    lcd.clear();
+    lcd.print(" P2  ");
+    lcd.print(p1Score);
+    lcd.print("--");
+    lcd.print(p2Score);
+    lcd.print("   P1 ");
+    lcd.setCursor(0, 1);
+    lcd.print("   ");
+    lcd.print(p2SetWon);
+    lcd.print("  Sets  ");
+    lcd.print(p1SetWon);
+
+
+  }
+}
+
+
+
+/*This method prints the winner of the game (best of 5 sets)
+   It configures the LED of the winner to blink
+   This method is called within the overallWinner method, where the winner of the game is passed as a parameter
+*/
+
+void winnerScreen(String winner) {
+  lcd.clear();
+  //turn off both LEDs, game over!
+
+  digitalWrite(ledPin1, LOW);
+  digitalWrite(ledPin2, LOW);
+
+  //blink winner's LED only
+
+  if (winner.equals("Player 1")) {
+
+    for (int i = 0; i < 10; i++) {
+      digitalWrite(ledPin1, HIGH);
+      delay (50);
+      digitalWrite(ledPin1, LOW);
+      delay (50);
+    }
+  } else if (winner.equals("Player 2")) {
+
+    for (int i = 0; i < 10; i++) {
+      digitalWrite(ledPin2, HIGH);
+      delay (50);
+      digitalWrite(ledPin2, LOW);
+      delay (50);
+    }
+  }
+  //screen prints which plater won and the number of sets won
+  lcd.print(winner + " won");
+  lcd.setCursor(0, 1);
+  lcd.print("   ");
+  lcd.print(p1SetWon);
+  lcd.print("  Sets  ");
+  lcd.print(p2SetWon);
+}
+
+
+
